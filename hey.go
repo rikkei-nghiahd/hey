@@ -48,6 +48,7 @@ var (
 	authHeader  = flag.String("a", "", "")
 	hostHeader  = flag.String("host", "", "")
 	userAgent   = flag.String("U", "", "")
+	useIndex    = flag.Bool("i", true, "")
 
 	output = flag.String("o", "", "")
 
@@ -195,7 +196,7 @@ func main() {
 	if err != nil {
 		usageAndExit(err.Error())
 	}
-	req.ContentLength = int64(len(bodyAll))
+	//req.ContentLength = int64(len(bodyAll))
 	if username != "" || password != "" {
 		req.SetBasicAuth(username, password)
 	}
@@ -234,6 +235,7 @@ func main() {
 		H2:                 *h2,
 		ProxyAddr:          proxyURL,
 		Output:             *output,
+		UseIndexRequest:    *useIndex,
 	}
 	w.Init()
 

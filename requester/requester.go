@@ -18,14 +18,17 @@ package requester
 import (
 	"bytes"
 	"crypto/tls"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptrace"
 	"net/url"
 	"os"
+	"reflect"
 	"sync"
 	"time"
+	"unsafe"
 
 	"golang.org/x/net/http2"
 )
@@ -98,6 +101,28 @@ type Work struct {
 	start    time.Duration
 
 	report *report
+
+	UseIndexRequest bool
+}
+
+func s2b(s string) (b []byte) {
+
+	/* #nosec G103 */
+
+	bh := (*reflect.SliceHeader)(unsafe.Pointer(&b))
+
+	/* #nosec G103 */
+
+	sh := (*reflect.StringHeader)(unsafe.Pointer(&s))
+
+	bh.Data = sh.Data
+
+	bh.Cap = sh.Len
+
+	bh.Len = sh.Len
+
+	return b
+
 }
 
 func (b *Work) writer() io.Writer {
@@ -144,18 +169,41 @@ func (b *Work) Finish() {
 	b.report.finalize(total)
 }
 
-func (b *Work) makeRequest(c *http.Client) {
+func (b *Work) makeRequest(c *http.Client, index int, bodycopy []byte, rawQuery string) {
 	s := now()
+	var body []byte
 	var size int64
 	var code int
 	var dnsStart, connStart, resStart, reqStart, delayStart time.Duration
 	var dnsDuration, connDuration, resDuration, reqDuration, delayDuration time.Duration
 	var req *http.Request
+	if b.UseIndexRequest {
+		if b.Request.Method == http.MethodPost {
+			buf := bytes.Buffer{}
+			buf.WriteString("-----------------------------258510959329813394314105629578")
+			buf.WriteRune(13)
+			buf.WriteRune(10)
+			buf.WriteString(fmt.Sprintf("Content-Disposition: form-data; name=\"file\"; filename=\"test_%d.txt\"", index))
+			buf.WriteRune(13)
+			buf.WriteRune(10)
+			buf.Write(bodycopy)
+			body = buf.Bytes()
+		} else if b.Request.Method == http.MethodDelete {
+			//b.Request.URL.RawQuery = fmt.Sprintf(rawQuery, index)
+			rawQuery = fmt.Sprintf(rawQuery, index)
+		}
+	} else {
+		body = b.RequestBody
+	}
+	//fmt.Println(b.RequestBody)
+
 	if b.RequestFunc != nil {
 		req = b.RequestFunc()
 	} else {
-		req = cloneRequest(b.Request, b.RequestBody)
+		req = cloneRequest(b.Request, body)
 	}
+	req.URL.RawQuery = rawQuery
+	req.ContentLength = int64(len(body))
 	trace := &httptrace.ClientTrace{
 		DNSStart: func(info httptrace.DNSStartInfo) {
 			dnsStart = now()
@@ -206,7 +254,7 @@ func (b *Work) makeRequest(c *http.Client) {
 	}
 }
 
-func (b *Work) runWorker(client *http.Client, n int) {
+func (b *Work) runWorker(client *http.Client, n int, s int, body []byte, rawQuery string) {
 	var throttle <-chan time.Time
 	if b.QPS > 0 {
 		throttle = time.Tick(time.Duration(1e6/(b.QPS)) * time.Microsecond)
@@ -226,7 +274,7 @@ func (b *Work) runWorker(client *http.Client, n int) {
 			if b.QPS > 0 {
 				<-throttle
 			}
-			b.makeRequest(client)
+			b.makeRequest(client, s+i, body, rawQuery)
 		}
 	}
 }
@@ -254,8 +302,12 @@ func (b *Work) runWorkers() {
 
 	// Ignore the case where b.N % b.C != 0.
 	for i := 0; i < b.C; i++ {
+		s := i * b.C
+		bodycopy := make([]byte, len(b.RequestBody))
+		copy(bodycopy, b.RequestBody)
+		rawQuery := b.Request.URL.RawQuery
 		go func() {
-			b.runWorker(client, b.N/b.C)
+			b.runWorker(client, b.N/b.C, s, bodycopy, rawQuery)
 			wg.Done()
 		}()
 	}
@@ -270,6 +322,9 @@ func cloneRequest(r *http.Request, body []byte) *http.Request {
 	*r2 = *r
 	// deep copy of the Header
 	r2.Header = make(http.Header, len(r.Header))
+	//*r2.URL = *r.URL
+	urlCopy := *r.URL
+	r2.URL = &urlCopy
 	for k, s := range r.Header {
 		r2.Header[k] = append([]string(nil), s...)
 	}
