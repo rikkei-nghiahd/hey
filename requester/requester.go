@@ -18,9 +18,10 @@ package requester
 import (
 	"bytes"
 	"crypto/tls"
-	"fmt"
+	"encoding/json"
 	"io"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"net/http/httptrace"
 	"net/url"
@@ -102,7 +103,8 @@ type Work struct {
 
 	report *report
 
-	UseIndexRequest bool
+	UseIndexRequest   bool
+	BodyRequestRandom map[string][]interface{}
 }
 
 func s2b(s string) (b []byte) {
@@ -169,32 +171,32 @@ func (b *Work) Finish() {
 	b.report.finalize(total)
 }
 
-func (b *Work) makeRequest(c *http.Client, index int, bodycopy []byte, rawQuery string) {
+func (b *Work) makeRequest(c *http.Client, index int, body []byte, rawQuery string) {
 	s := now()
-	var body []byte
+	//var body []byte
 	var size int64
 	var code int
 	var dnsStart, connStart, resStart, reqStart, delayStart time.Duration
 	var dnsDuration, connDuration, resDuration, reqDuration, delayDuration time.Duration
 	var req *http.Request
-	if b.UseIndexRequest {
-		if b.Request.Method == http.MethodPost {
-			buf := bytes.Buffer{}
-			buf.WriteString("-----------------------------258510959329813394314105629578")
-			buf.WriteRune(13)
-			buf.WriteRune(10)
-			buf.WriteString(fmt.Sprintf("Content-Disposition: form-data; name=\"file\"; filename=\"test_%d.txt\"", index))
-			buf.WriteRune(13)
-			buf.WriteRune(10)
-			buf.Write(bodycopy)
-			body = buf.Bytes()
-		} else if b.Request.Method == http.MethodDelete {
-			//b.Request.URL.RawQuery = fmt.Sprintf(rawQuery, index)
-			rawQuery = fmt.Sprintf(rawQuery, index)
-		}
-	} else {
-		body = b.RequestBody
-	}
+	//if b.UseIndexRequest {
+	//	if b.Request.Method == http.MethodPost {
+	//		buf := bytes.Buffer{}
+	//		buf.WriteString("-----------------------------258510959329813394314105629578")
+	//		buf.WriteRune(13)
+	//		buf.WriteRune(10)
+	//		buf.WriteString(fmt.Sprintf("Content-Disposition: form-data; name=\"file\"; filename=\"test_%d.txt\"", index))
+	//		buf.WriteRune(13)
+	//		buf.WriteRune(10)
+	//		buf.Write(bodycopy)
+	//		body = buf.Bytes()
+	//	} else if b.Request.Method == http.MethodDelete {
+	//		//b.Request.URL.RawQuery = fmt.Sprintf(rawQuery, index)
+	//		rawQuery = fmt.Sprintf(rawQuery, index)
+	//	}
+	//} else {
+	//	body = b.RequestBody
+	//}
 	//fmt.Println(b.RequestBody)
 
 	if b.RequestFunc != nil {
@@ -274,6 +276,7 @@ func (b *Work) runWorker(client *http.Client, n int, s int, body []byte, rawQuer
 			if b.QPS > 0 {
 				<-throttle
 			}
+			body = b.getBody(s + i)
 			b.makeRequest(client, s+i, body, rawQuery)
 		}
 	}
@@ -303,11 +306,10 @@ func (b *Work) runWorkers() {
 	// Ignore the case where b.N % b.C != 0.
 	for i := 0; i < b.C; i++ {
 		s := i * b.C
-		bodycopy := make([]byte, len(b.RequestBody))
-		copy(bodycopy, b.RequestBody)
+
 		rawQuery := b.Request.URL.RawQuery
 		go func() {
-			b.runWorker(client, b.N/b.C, s, bodycopy, rawQuery)
+			b.runWorker(client, b.N/b.C, s, nil, rawQuery)
 			wg.Done()
 		}()
 	}
@@ -339,4 +341,16 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func (b *Work) getBody(index int) (data []byte) {
+	body := make(map[string]interface{})
+	for k, v := range b.BodyRequestRandom {
+		body[k] = v[index%len(v)]
+	}
+	data, err := json.Marshal(body)
+	if err != nil {
+		log.Printf("[error] failed to call json.Marshal, index: %d", index)
+	}
+	return
 }

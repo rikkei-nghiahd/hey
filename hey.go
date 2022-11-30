@@ -16,9 +16,12 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
+	"log"
 	"math"
 	"net/http"
 	gourl "net/url"
@@ -44,7 +47,7 @@ var (
 	body        = flag.String("d", "", "")
 	bodyFile    = flag.String("D", "", "")
 	accept      = flag.String("A", "", "")
-	contentType = flag.String("T", "text/html", "")
+	contentType = flag.String("T", "application/json", "")
 	authHeader  = flag.String("a", "", "")
 	hostHeader  = flag.String("host", "", "")
 	userAgent   = flag.String("U", "", "")
@@ -220,7 +223,13 @@ func main() {
 		header.Set("User-Agent", ua)
 	}
 
+	for k, v := range req.Header {
+		for _, s := range v {
+			header.Set(k, s)
+		}
+	}
 	req.Header = header
+	bodyRequest := readBody()
 
 	w := &requester.Work{
 		Request:            req,
@@ -236,6 +245,7 @@ func main() {
 		ProxyAddr:          proxyURL,
 		Output:             *output,
 		UseIndexRequest:    *useIndex,
+		BodyRequestRandom:  bodyRequest,
 	}
 	w.Init()
 
@@ -288,4 +298,20 @@ func (h *headerSlice) String() string {
 func (h *headerSlice) Set(value string) error {
 	*h = append(*h, value)
 	return nil
+}
+
+func readBody() (data map[string][]interface{}) {
+	file, err := os.Open("body_request.json")
+	if err != nil {
+		log.Fatalf("[error] failed to call os.Open(), %s", err)
+	}
+	b, _ := io.ReadAll(file)
+	if err != nil {
+		log.Fatalf("[error] failed to call io.ReadAll file config.json, %v", err)
+	}
+	err = json.Unmarshal(b, &data)
+	if err != nil {
+		log.Fatalf("[error] failed to call json.Unmarshal, %v", err)
+	}
+	return data
 }

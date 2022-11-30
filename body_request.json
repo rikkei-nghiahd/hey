@@ -1,0 +1,6 @@
+{
+  "name": ["Category1", "Category2", "Category3", "Category4", "Category5"],
+  "days": [1, 2, 3, 4, 5],
+  "type": [0],
+  "file": [true, false]
+}
