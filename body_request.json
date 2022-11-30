@@ -1,6 +1,26 @@
-{
-  "name": ["Category1", "Category2", "Category3", "Category4", "Category5"],
-  "days": [1, 2, 3, 4, 5],
-  "type": [0],
-  "file": [true, false]
-}
+[
+  {
+    "field_1": "Category1",
+    "field_2": 1,
+    "field_3": 0,
+    "field_4": true
+  },
+  {
+    "field_1": "Category2",
+    "field_2": 1,
+    "field_3": 0,
+    "field_4": true
+  },
+  {
+    "field_1": "Category3",
+    "field_2": 1,
+    "field_3": 0,
+    "field_4": true
+  },
+  {
+    "field_1": "Category4",
+    "field_2": 1,
+    "field_3": 0,
+    "field_4": true
+  }
+]

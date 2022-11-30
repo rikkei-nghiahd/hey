@@ -245,7 +245,7 @@ func main() {
 		ProxyAddr:          proxyURL,
 		Output:             *output,
 		UseIndexRequest:    *useIndex,
-		BodyRequestRandom:  bodyRequest,
+		BodyRequestList:    bodyRequest,
 	}
 	w.Init()
 
@@ -300,7 +300,7 @@ func (h *headerSlice) Set(value string) error {
 	return nil
 }
 
-func readBody() (data map[string][]interface{}) {
+func readBody() (data []interface{}) {
 	file, err := os.Open("body_request.json")
 	if err != nil {
 		log.Fatalf("[error] failed to call os.Open(), %s", err)

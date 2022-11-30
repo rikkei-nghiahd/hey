@@ -103,8 +103,8 @@ type Work struct {
 
 	report *report
 
-	UseIndexRequest   bool
-	BodyRequestRandom map[string][]interface{}
+	UseIndexRequest bool
+	BodyRequestList []interface{}
 }
 
 func s2b(s string) (b []byte) {
@@ -305,7 +305,7 @@ func (b *Work) runWorkers() {
 
 	// Ignore the case where b.N % b.C != 0.
 	for i := 0; i < b.C; i++ {
-		s := i * b.C
+		s := i * b.N / b.C
 
 		rawQuery := b.Request.URL.RawQuery
 		go func() {
@@ -344,13 +344,9 @@ func min(a, b int) int {
 }
 
 func (b *Work) getBody(index int) (data []byte) {
-	body := make(map[string]interface{})
-	for k, v := range b.BodyRequestRandom {
-		body[k] = v[index%len(v)]
-	}
-	data, err := json.Marshal(body)
+	data, err := json.Marshal(b.BodyRequestList[index%len(b.BodyRequestList)])
 	if err != nil {
-		log.Printf("[error] failed to call json.Marshal, index: %d", index)
+		log.Printf("[error] failed to call json.Marshal, index: %d", index%len(b.BodyRequestList))
 	}
 	return
 }
